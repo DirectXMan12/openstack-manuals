@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section xml:id="install-neutron"
+    xmlns="http://docbook.org/ns/docbook"
+    xmlns:xi="http://www.w3.org/2001/XInclude"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+    xmlns:svg="http://www.w3.org/2000/svg"
+    xmlns:html="http://www.w3.org/1999/xhtml"
+    version="5.0">
+  <title>Installing and Configuring Openstack Networking</title>
+
+  <section xml:id="install-neutron-network-node">
+    <title>Install Networking on the Network Node</title>
+    <procedure>
+      <step>
+        <para>Install the Networking Service on the network node</para>
+        <screen os="ubuntu"><prompt>#</prompt> <userinput>sudo apt-get install neutron</userinput></screen>
+        <screen os="rhel;centos;fedora"><prompt>#</prompt> <userinput>sudo yum install openstack-neutron</userinput></screen>
+        <screen os="opensuse"><prompt>#</prompt> <userinput>zypper install openstack-neutron</userinput></screen>
+      </step>
+
+      <step>
+        <para>First, we need to make sure that our network adapters are in place</para>
+        <!-- TODO(sross): fill in this section, or move to other place? -->
+
+        <para>Then, we must enable packet forwarding by editing the file <filename>/etc/sysctl.conf</filename></para>
+        <programlisting language="ini">
+          net.ipv4.ip_forward=1
+          net.ipv4.conf.all.rp_filter=0
+          net.ipv4.conf.default.rp_filter=0
+        </programlisting>
+      </step>
+
+      <step>
+        <para>Now we need to create the required tenant and endpoint</para>
+        <!-- TODO(sross): implement -->
+      </step>
+
+      <step>
+        <para>Next, we install the networking plugin</para>
+        <itemizedlist>
+          <listitem>
+            <para>For OpenVSwitch (a common choice)</para>
+            <screen os="rhel;centos;fedora"><prompt>#</prompt> <userinput>sudo yum install openstack-neutron-openvswitch</userinput></screen>
+            <!-- TODO(sross): support other distros -->
+          </listitem>
+          <!-- TODO(sross): support other plugins -->
+        </itemizedlist>
+      </step>
+
+      <step>
+        <title>Set up the plugin</title>
+        <substeps>
+          <step>
+            <stepalternatives>
+              <step>
+                <para>Setup OpenVSwitch</para>
+                <para>We now need to create the virtual bridges.  There are two bridges: <literal>br-ex</literal> (the external bridge), and <literal>br-int</literal> (the integration bridge, to which the VMs are connected).  To the external bridge, we hook up <replaceable>EXTERNAL_INTERFACE</replaceable> (replace with your chosen adapter name).</para>
+
+                <screen><prompt>#</prompt> <userinput>ovs-vsctl add-br br-int</userinput></screen>
+                <screen><prompt>#</prompt> <userinput>ovs-vsctl add-br br-ex</userinput></screen>
+                <screen><prompt>#</prompt> <userinput>ovs-vsctl add-port br-ex EXTERNAL_INTERFACE</userinput></screen>
+
+                <para>Now, we set the external bridge's link state to up, and configure the bridge's link in the file <filename os="rhel;centos;fedora">/etc/sysconfig/network-scripts/ifcfg-br-ex</filename> (replace all text starting with <replaceable>EXTERNAL_INTERFACE_</replaceable> with the appropriate value).</para>
+                <programlisting os="rhel;centos;fedora" language="ini">
+                  DEVICE=br-ex
+                  TYPE=Bridge
+                  ONBOOT=no
+                  NM_CONTROLLED=no
+                  BOOTPROTO=none
+                  IPADDR=EXTERNAL_INTERFACE_IP_ADDR
+                  NETMASK=EXTERNAL_INTERFACE_NETMASK
+                  GATEWAY=EXTERNAL_INTERFACE_GATEWAY
+                  DNS1=EXTERNAL_INTERFACE_DNS1
+                </programlisting>
+                <!-- TODO(sross): add the BRIDGE=br-ex line to ifcfg-EXTERNAL_INTERFACE? -->
+                <!-- TODO(sross): make sure to note if these steps are GRE or VLAN specific -->
+                <!-- TODO(sross): support other distros -->
+                <para>restart the network service to apply the changes</para>
+                <screen os="rhel;centos;fedora"><prompt>#</prompt> <userinput>service network restart</userinput></screen>
+              </step>
+            </stepalternatives>
+          </step>
+
+          <step performance="optional">
+            <para>Optionally, we can add some NAT rules here to allow communication with the outside world from the Neutron public network.</para>
+            <substeps>
+              <step>
+                <para>To do this, we first add forwarding rules for the <literal>br-ex</literal> interface</para>
+                <screen><prompt>#</prompt> <userinput>iptables -I FORWARD -i br-ex -j ACCEPT</userinput></screen>
+                <screen><prompt>#</prompt> <userinput>iptables -I FORWARD -o br-ex -j ACCEPT</userinput></screen>
+              </step>
+              <step>
+                <para>Then, we need to add a <literal>MASQUERADE</literal> rule to ensure that connections from the inside to the outside will be modified so as to appear as coming from the host system (replace <replaceable>INTERNAL_CIDR</replaceable> with the appropriate value)</para>
+                <screen><prompt>#</prompt> <userinput>iptables -t NAT -I POSTROUTING -s INTERNAL_CIDR ! -d INTERNAL_CIDR -j MASQERADE</userinput></screen>
+              </step>
+            </substeps>
+          </step>
+
+          <step>
+            <para>Now, we need to configure Neutron.  This depends somewhat on which plugin you are using.</para>
+            <substeps>
+              <step>
+                <stepalternatives>
+                  <step>
+                    <para>For OpenVSwitch, the exact configuration depends on whether you are using GRE tunneling (easier, but a bit less flexible) or VLANs (harder, but more flexible)</para>
+                    <stepalternatives>
+                      <step>
+                        <para>For GRE tunneling:</para>
+                        <substeps>
+                          <step>
+                            <para>We first need to confiure the l3_agent to use the OVS driver, and to not use namespaces.  Edit <filename>/etc/neutron/l3_agent.ini</filename></para>
+                            <programlisting language="ini">
+                              use_namespaces = False
+                              interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver
+                            </programlisting>
+                          </step>
+
+                          <step>
+                            <para>Then, we need to edit the main neutron configuration to use the OVS plugin, editing <filename>/etc/neutron/neutron.conf</filename></para>
+                            <programlisting language="ini">
+                              core_plugin = neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2
+                            </programlisting>
+                          </step>
+
+                          <step>
+                            <!-- TODO(sross): make a note about symlinking plugin.ini to ovs_neutron_plugin.ini? -->
+                            <para>Then, we configure the OVS plugin with <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini</filename> (remember to replace the replaceable parts, and don't worry, neutron will create <literal>br-tun</literal> for us)</para>
+                            <programlisting language="ini">
+                              [database]
+                              sql_connection = SQL_CONNECTION_USER_NEUTRON
+                            </programlisting>
+
+                            <programlisting language="ini">
+                              [ovs]
+                              tenant_network_type = gre
+                              tunnel_id_ranges = 1:1000
+                              enable_tunneling = True
+                              integration_bridge = br-int
+                              tunnel_bridge = br-tun
+                              local_ip = EXTERNAL_INTERFACE_IP
+                            </programlisting>
+                          </step>
+
+                          <step performance="optional">
+                            <para>Optionally, you may wish to enable a firewall driver.  This is cover in another section</para>
+                          </step>
+
+                          <step>
+                            <para>Finally, we need to configure the DHCP agent with <filename>/etc/neutron/dhcp_agent.ini</filename></para>
+                            <programlisting language="ini">
+                              use_namespaces = False
+                              interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver
+                              dhcp_driver = neutron.agent.linux.dhcp.dnsmasq
+                            </programlisting>
+                          </step>
+                        </substeps>
+                      </step>
+                      <!-- TODO(sross): support VLANs -->
+                    </stepalternatives>
+                  </step>
+                  <!-- TODO(sross): support other plugins -->
+                </stepalternatives>
+              </step>
+              <step>
+                <para>Now, restart the services</para>
+                <screen><prompt>#</prompt> <userinput>service neutron-openvswitch-agent restart</userinput></screen>
+                <screen><prompt>#</prompt> <userinput>service neutron-dhcp-agent restart</userinput></screen>
+                <screen><prompt>#</prompt> <userinput>service neutron-l3-agent restart</userinput></screen>
+              </step>
+            </substeps>
+          </step>
+        </substeps>
+      </step>
+
+      <step>
+        <para>Next, we must create the various routers and networks in Neutron</para>
+        <note><para>You may wish to use the <literal>get_id</literal> function provided earlier in the documentation here.  Alternatively, you can run the <literal>neutron</literal> command with no arguments to get to a prompt, so you don't have to type <literal>neutron</literal> on every line</para></note>
+        <substeps>
+          <step>
+            <stepalternatives>
+              <step>
+                <para>First, we create the external network</para>
+                <screen><prompt>#</prompt> <userinput>neutron net-create ext_net --router:external=True --provider:network_type gre --provider:segmentation_id 1</userinput></screen>
+
+                <para>as well as the associated subnet</para>
+                <screen><prompt>#</prompt> <userinput>neutron subnet-create ext_net --allocation-pool start=FLOATING_IP_START,end=FLOATING_IP_END --gateway=EXTERNAL_INTERFACE_GATEWAY --enable_dhcp=False EXTERNAL_INTERFACE_CIDR</userinput></screen>
+              </step>
+              <!-- TODO(sross): support VLANs -->
+            </stepalternatives>
+          </step>
+          <step>
+            <para>Next, we create the external network's router, which connects allows it to be connected to any of the internal networks</para>
+            <screen><prompt>#</prompt> <userinput>neturon router-create ext_to_int</userinput></screen>
+
+            <para>The, we associate the external network's subnet with the new router by setting its gateway</para>
+            <screen><prompt>#</prompt> <userinput>neutron router-gateway-set $EXT_TO_INT_ID $EXT_SUBNET_ID</userinput></screen>
+          </step>
+          <step>
+            <para>Now we could create some tenant-specific internal networks</para>
+            <!-- TODO(sross): provide an example (segmentation_id 2)-->
+            <para>and connect them to the router by adding them as interfaces</para>
+            <screen><prompt>#</prompt> <userinput>neutron router-interface-add $EXT_TO_INT_ID $SOME_TENANT_SUBNET_ID</userinput></screen>
+          </step>
+        </substeps>
+      </step>
+    </procedure>
+  </section>
+  <section xml:id="install-neutron-compute-nodes">
+    <title>Install Networking on the Compute Node(s)</title>
+    <para>TODO</para>
+    <!-- TODO(sross): implement -->
+  </section>
+</section>

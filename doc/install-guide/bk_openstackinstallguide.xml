@@ -510,6 +510,10 @@
 
     <xi:include href="ch_installidentity.xml"/>
     <xi:include href="ch_installimage.xml"/>
+    <chapter xml:id="ch_neutron">
+        <title>Neutron</title>
+        <xi:include href="section_install-config-neutron.xml"/>
+    </chapter>
 
     <chapter xml:id="ch_nova">
       <title>Installing the Nova Compute Services</title>
