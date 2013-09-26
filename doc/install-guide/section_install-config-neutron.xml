@@ -133,7 +133,7 @@
           use_namespaces = False
         </programlisting>
 
-        <para>Then, we tell the <acronym>OVS</acronym> plugin to use GRE tunneling, using an integration bridge of <literal>br-int</literal> and a tunneling bridge of <literal>br-tun</literal>, and to use a local IP of the whatever <replaceable>EXTERNAL_INTERFACE</replaceable>'s IP address was supposed to be.  Edit <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini</filename>:</para>
+        <para>Then, we tell the <acronym>OVS</acronym> plugin to use GRE tunneling, using an integration bridge of <literal>br-int</literal> and a tunneling bridge of <literal>br-tun</literal>, and to use a local IP for the tunnel of <replaceable>DATA_INTERFACE</replaceable>'s IP.  Edit <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini</filename>:</para>
         <programlisting language="ini">
           [ovs]
           tenant_network_type = gre
@@ -141,16 +141,35 @@
           enable_tunneling = True
           integration_bridge = br-int
           tunnel_bridge = br-tun
-          local_ip = EXTERNAL_INTERFACE_IP
+          local_ip = DATA_INTERFACE_IP
         </programlisting>
 
         <para>Now, return to the <acronym>OVS</acronym> general instruction</para>
       </section>
 
       <section xml:id="install-neutron.install-plugin.ovs.vlan">
-          <title>Configuring the Neutron <acronym>OVS</acronym> plugin for VLANs</title>
-          <para>TODO</para>
-        <!-- TODO(sross): write up the VLAN instructions -->
+        <title>Configuring the Neutron <acronym>OVS</acronym> plugin for VLANs</title>
+        <!-- NOTE(sross): this is a WIP, and has yet to be tested.  Additionally, a plugin install guide specific to compute nodes will have to be written -->
+        <para>First, we must tell <acronym>OVS</acronym> that we want to use VLANS by editing <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin</filename>:</para>
+        <programlisting language="ini">
+          [ovs]
+          tenant_network_type = vlan
+          network_vlan_ranges = physnet1:1:4094
+          bridge_mappings = physnet1:br-DATA_INTERFACE
+        </programlisting>
+
+        <para>Then, create the bridge for <replaceable>DATA_INTERFACE</replaceable> and add <replaceable>DATA_INTERFACE</replaceable> to it:</para>
+        <screen>
+          <prompt>#</prompt> <userinput>ovs-vsctl add-br br-DATA_INTERFACE</userinput>
+          <prompt>#</prompt> <userinput>ovs-vsctl add-port br-DATA_INTERFACE DATA_INTERFACE</userinput>
+        </screen>
+
+        <para>Next, we must tell the L3 and DHCP agents that we want to use namespaces, by editing <filename>/etc/neutron/l3_agent.ini</filename> and <filename>/etc/neutron/dhcp_agent.ini</filename>, respectively:</para>
+        <programlisting language="ini">
+          use_namespaces = True
+        </programlisting>
+
+        <para>Now, return to the <acronym>OVS</acronym> general instruction</para>
       </section>
     </section>
   </section>
@@ -247,4 +266,5 @@
       PUT_YOUR_RPC_BACKEND_SETTINGS_HERE_TOO
     </programlisting>
   </section>
+  <!-- TODO(sross): document installing neutron components on the controller (plugins) -->
 </section>
