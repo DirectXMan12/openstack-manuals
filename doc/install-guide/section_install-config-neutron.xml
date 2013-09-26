@@ -70,7 +70,6 @@
     <para>Next, <link linkend="install-neutron.configure-networks">configure the base networks</link> and return here</para>
 
   </section>
-
   <section xml:id="install-neutron.install-plugin">
     <title>Installing and configuring the Neutron plugins</title>
 
@@ -174,6 +173,151 @@
     </section>
   </section>
 
+  <section xml:id="install-neutron.install-plugin-compute">
+    <title>Installing and configuring the Neutron plugins on the dedicated compute Node</title>
+
+    <section xml:id="install-neutron.install-plugin-compute.ovs">
+      <title>Installing the Open vSwitch (OVS) plugin on the dedicated compute node</title>
+
+      <para>First, we must install the Open vSwitch plugin and its dependencies</para>
+      <screen os="rhel;fedora;centos"><prompt>#</prompt> <userinput>sudo yum install openstack-neutron-openvswitch</userinput></screen>
+      <!-- TODO(sross): support other distros -->
+
+      <para>Now, we start up Open vSwitch</para>
+      <screen os="rhel;fedora;centos"><prompt>#</prompt> <userinput>sudo service openvswitch start</userinput></screen>
+
+      <para>Next, we must do some initial configuration for Open vSwitch, no matter whether we are using VLANs or GRE tunneling.  We need to add the integration bridge (this connects to the VMs), called <literal>br-int</literal></para>
+      <screen><prompt>#</prompt> <userinput>ovs-vsctl add-br br-int</userinput></screen>
+
+      <para>Finally, we can now configure the settings for the particular plugins.  First, there are some general <acronym>OVS</acronym> configuration options to set, no matter whether you use VLANs or GRE tunneling. We need to tell Neutron core to use <acronym>OVS</acronym> by editing <filename>/etc/neutron/neutron.conf</filename>:</para>
+      <programlisting language="ini">
+        core_plugin = neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2
+      </programlisting>
+
+      <para>We also need to tell the <acronym>OVS</acronym> plugin how to connect to the database by editing <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini</filename>:</para>
+      <programlisting language="ini">
+        [database]
+        sql_connection = DATABASE_TYPE://neutron:NETURON_PASSWORD@CONTROLLER_NODE_HOSTNAME/neutron
+      </programlisting>
+
+      <para>Now, we must perform the configuration for the network type we chose when configuring the network node.  <link linkend="install-neutron.install-plugin-compute.ovs.gre">GRE tunneling</link> or <link linkend="install-neutron.install-plugin-compute.ovs.vlan">VLANs</link>.</para>
+      <!-- TODO(sross): support provider networks?  We need to modify things above for this to work -->
+      <!-- TODO(sross): document firewall? -->
+
+      <para>After having configured OVS, restart the <acronym>OVS</acronym> plugin:</para>
+      <screen><prompt>#</prompt> <userinput>service neutron-openvswitch-agent restart</userinput></screen>
+
+      <note>
+        <para>Make sure to check that the plugin restarted successfully.  If you get errors about missing the file <filename>plugin.ini</filename>, simply make a symlink pointing at <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini</filename> with the "name" <filename>/etc/neutron/plugins.ini</filename></para>
+      </note>
+
+      <para>Now, return whence you came!</para>
+
+      <section xml:id="install-neutron.install-plugin-compute.ovs.gre">
+        <title>Configuring the Neutron <acronym>OVS</acronym> plugin for GRE Tunneling on the dedicated compute node</title>
+
+        <para>We must tell the <acronym>OVS</acronym> plugin to use GRE tunneling, using an integration bridge of <literal>br-int</literal> and a tunneling bridge of <literal>br-tun</literal>, and to use a local IP for the tunnel of <replaceable>DATA_INTERFACE</replaceable>'s IP.  Edit <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini</filename>:</para>
+        <programlisting language="ini">
+          [ovs]
+          tenant_network_type = gre
+          tunnel_id_ranges = 1:1000
+          enable_tunneling = True
+          integration_bridge = br-int
+          tunnel_bridge = br-tun
+          local_ip = DATA_INTERFACE_IP
+        </programlisting>
+
+        <para>Now, return to the <acronym>OVS</acronym> general instructions</para>
+      </section>
+
+      <section xml:id="install-neutron.install-plugin-compute.ovs.vlan">
+        <title>Configuring the Neutron <acronym>OVS</acronym> plugin for VLANs</title>
+        <!-- NOTE(sross): this is a WIP, and has yet to be tested.  Additionally, a plugin install guide specific to compute nodes will have to be written -->
+        <para>First, we must tell <acronym>OVS</acronym> that we want to use VLANS by editing <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin</filename>:</para>
+        <programlisting language="ini">
+          [ovs]
+          tenant_network_type = vlan
+          network_vlan_ranges = physnet1:1:4094
+          bridge_mappings = physnet1:br-DATA_INTERFACE
+        </programlisting>
+
+        <para>Then, create the bridge for <replaceable>DATA_INTERFACE</replaceable> and add <replaceable>DATA_INTERFACE</replaceable> to it:</para>
+        <screen>
+          <prompt>#</prompt> <userinput>ovs-vsctl add-br br-DATA_INTERFACE</userinput>
+          <prompt>#</prompt> <userinput>ovs-vsctl add-port br-DATA_INTERFACE DATA_INTERFACE</userinput>
+        </screen>
+
+        <para>Now, return to the <acronym>OVS</acronym> general instruction</para>
+      </section>
+    </section>
+  </section>
+
+  <section xml:id="install-neutron.install-plugin-controller">
+    <title>Installing and configuring the Neutron plugins on the dedicated controller Node</title>
+
+    <section xml:id="install-neutron.install-plugin-controller.ovs">
+      <title>Installing the Open vSwitch (OVS) plugin on the dedicated controller node</title>
+
+      <para>First, we must install the Open vSwitch plugin and its dependencies</para>
+      <screen os="rhel;fedora;centos"><prompt>#</prompt> <userinput>sudo yum install openstack-neutron-openvswitch</userinput></screen>
+      <!-- TODO(sross): support other distros -->
+
+      <para>Now, we start up Open vSwitch</para>
+      <screen os="rhel;fedora;centos"><prompt>#</prompt> <userinput>sudo service openvswitch start</userinput></screen>
+
+      <para>Then, we can now configure the settings for the particular plugins.  First, there are some general <acronym>OVS</acronym> configuration options to set, no matter whether you use VLANs or GRE tunneling. We need to tell Neutron core to use <acronym>OVS</acronym> by editing <filename>/etc/neutron/neutron.conf</filename>:</para>
+      <programlisting language="ini">
+        core_plugin = neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2
+      </programlisting>
+
+      <para>We also need to tell the <acronym>OVS</acronym> plugin how to connect to the database by editing <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini</filename>:</para>
+      <programlisting language="ini">
+        [database]
+        sql_connection = DATABASE_TYPE://neutron:NETURON_PASSWORD@CONTROLLER_NODE_HOSTNAME/neutron
+      </programlisting>
+
+      <para>Now, we must perform the configuration for the network type we chose when configuring the network node.  <link linkend="install-neutron.install-plugin-controller.ovs.gre">GRE tunneling</link> or <link linkend="install-neutron.install-plugin-controller.ovs.vlan">VLANs</link>.</para>
+      <!-- TODO(sross): support provider networks?  We need to modify things above for this to work -->
+      <!-- TODO(sross): document firewall? -->
+
+      <para>After having configured OVS, restart the <acronym>OVS</acronym> plugin:</para>
+      <screen><prompt>#</prompt> <userinput>service neutron-openvswitch-agent restart</userinput></screen>
+
+      <note>
+        <para>Make sure to check that the plugin restarted successfully.  If you get errors about missing the file <filename>plugin.ini</filename>, simply make a symlink pointing at <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini</filename> with the "name" <filename>/etc/neutron/plugins.ini</filename></para>
+      </note>
+
+      <para>Now, return whence you came!</para>
+
+      <section xml:id="install-neutron.install-plugin-controller.ovs.gre">
+        <title>Configuring the Neutron <acronym>OVS</acronym> plugin for GRE Tunneling on the dedicated compute node</title>
+
+        <para>We must tell the <acronym>OVS</acronym> plugin to use GRE tunneling.  Edit <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini</filename>:</para>
+        <programlisting language="ini">
+          [ovs]
+          tenant_network_type = gre
+          tunnel_id_ranges = 1:1000
+          enable_tunneling = True
+        </programlisting>
+
+        <para>Now, return to the <acronym>OVS</acronym> general instructions</para>
+      </section>
+
+      <section xml:id="install-neutron.install-plugin-controller.ovs.vlan">
+        <title>Configuring the Neutron <acronym>OVS</acronym> plugin for VLANs</title>
+        <!-- NOTE(sross): this is a WIP, and has yet to be tested.  Additionally, a plugin install guide specific to compute nodes will have to be written -->
+        <para>First, we must tell <acronym>OVS</acronym> that we want to use VLANS by editing <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin</filename>:</para>
+        <programlisting language="ini">
+          [ovs]
+          tenant_network_type = vlan
+          network_vlan_ranges = physnet1:1:4094
+        </programlisting>
+
+        <para>Now, return to the <acronym>OVS</acronym> general instruction</para>
+      </section>
+    </section>
+  </section>
+
   <section xml:id="install-neutron.configure-networks">
     <title>Creating the base Neutron networks</title>
 
@@ -252,7 +396,7 @@
       net.ipv4.conf.default.rp_filter=0
     </programlisting>
 
-    <para>Next, we need to install and configure plugin components.  Follow the <link linkend="install-neutron.install-plugin">instructions</link> for configuring and installing <emphasis>only</emphasis> the plugin and neutron core, <emphasis>not</emphasis> the L3 or DHCP agents, or network interface modification. Return here, and then, restart the Neutron plugin services.</para>
+    <para>Next, we need to install and configure plugin components.  Follow the <link linkend="install-neutron.install-plugin-compute">instructions</link> for configuring and installing your plugin of choice.</para>
 
     <para>Now that you've installed and configured a plugin (you did do that, right?), it is time to configure the main part of Neutron by editing <filename>/etc/neutron/neutron.conf</filename>:</para>
     <programlisting language="ini">
