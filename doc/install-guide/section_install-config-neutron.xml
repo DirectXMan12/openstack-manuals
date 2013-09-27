@@ -411,4 +411,24 @@
     </programlisting>
   </section>
   <!-- TODO(sross): document installing neutron components on the controller (plugins) -->
+  <section xml:id="install-neutron.dedicated-controller-node">
+    <title>Install Required Networking Support on a Dedicated Controller Node</title>
+
+    <para>First, we need to install the main Neutron server, the Neutron libraries for python, and the Neutron CLI:</para>
+    <screen os="fedora;rhel;centos"><prompt>#</prompt> <userinput>yum install openstack-neutron python-neutron python-neutronclient</userinput></screen>
+    <!-- TODO(sross): support other distros -->
+
+    <para>Now, we need to set up the Neutron server, as usual.  Make sure to do the core server component setup (RPC backend config, auth_strategy, etc).  Then, we'll need to configure Neutron's copy of <filename>api-paste.ini</filename> at <filename>/etc/neutron/api-paste.ini</filename>:</para>
+    <programlisting language="ini">
+      admin_tenant_name = service
+      admin_user = neutron
+      admin_password = ADMIN_PASSWORD
+    </programlisting>
+
+    <para>Now, we need to configure the plugin you chose when we configured the Network node.  Follow the <link linkend="install-neutron.install-plugin-controller">instructions</link> and return.</para>
+
+    <para>Finally, we just need to start neutron-server:</para>
+    <screen><prompt>#</prompt> <userinput>service neutron-server start</userinput></screen>
+
+  </section>
 </section>
