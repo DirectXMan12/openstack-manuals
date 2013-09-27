@@ -8,16 +8,14 @@
     version="5.0">
   <title>Installing and Configuring Openstack Networking</title>
 
-  <section xml:id="common_setup">
-    <title>PLACEHOLDER (IGNORE)</title>
-    <para>PLACEHOLDER</para>
-  </section>
-
   <section xml:id="install-neutron.dedicated-network-node">
     <title>Install Networking Services on the Network Node</title>
 
     <note>
-      <para>Before we start, make sure your network node is set up according to <link linkend="common_setup">common setup</link> directions.</para>
+      <para>Before we start, you need to make sure that your machine is properly set up to be a dedicated network node.  Dedicated network nodes should have three NICs: the management NIC (called <replaceable>MGMT_INTERFACE</replaceable>), the data NIC (called <replaceable>DATA_INTERFACE</replaceable>), and the external NIC (called <replaceable>EXTERNAL_INTERFACE</replaceable>).</para>
+      <para>The management network is responsible for communication between nodes, the data network is responsible for communication comming to and from VMs, and the external NIC connects the network node to the ouside world, so your VMs can have connectivity to the outside world.</para>.
+
+      <para>All three NICs should have static IPs.  However, the data and external NICs have some special setup.  See the <link linkend="install-neutron.install-plugin">Neutron plugin section</link> for your chosen Neutron plugin for details</para>
     </note>
 
     <para>First, we must install the OpenStack Networking service on the node:</para>
@@ -38,8 +36,12 @@
       <screen os="rhel;centos;fedora;opensuse"><prompt>#</prompt> <userinput>sudo service network restart</userinput></screen>
     </note>
 
-    <para>Before continuing, we must create the required tenant and endpoint so that Neutron can interface with Keystone</para>
-    <!-- TODO(sross): write this section -->
+    <para>Before continuing, we must create the required user, service, and endpoint so that Neutron can interface with Keystone</para>
+    <screen>
+      <prompt>#</prompt> <userinput>keystone user-create --name=neutron --pass=NEUTRON_PASSWORD --tenant-id SERVICE_TENANT_ID --email=neutron@SOME_DOMAIN_HERE</userinput>
+      <prompt>#</prompt> <userinput>keystone user-role-add --tenant-id SERVICE_TENANT_ID --user-id NEUTRON_USER_ID ADMIN_ROLE_ID</userinput>
+      <prompt>#</prompt> <userinput>keystone endpoint-create --region RegionOne --service-id NEUTRON_SERVICE_ID --publicurl http://CONTROLLER_NODE_HOST:9696 --adminurl http://CONTROLLER_NODE_HOST:9696 --internalurl http://CONTROLLER_NODE_HOST:9696</userinput>
+    </screen>
 
     <para>Now, we can install, and then configure, our networking plugin.  The networking plugin is what Neutron uses to perform the actual software-defined networking.  There are several options for this.  Choose one, follow the <link linkend="install-neutron.install-plugin">instructions</link> in the linked section, and then return here.</para>
 
@@ -94,7 +96,24 @@
       <screen><prompt>#</prompt> <userinput>ovs-vsctl add-port br-ex EXTERNAL_INTERFACE</userinput></screen>
 
       <para>In order for things to work correctly, we must also configure <replaceable>EXTERNAL_INTERFACE</replaceable> to not have an IP address and to be in promiscuous mode.  Additionally, we need to set the newly created <literal>br-ex</literal> interface to have the IP address that formerly belonged to <replaceable>EXTERNAL_INTERFACE</replaceable>.</para>
-      <!-- TODO(sross): implement instructions for transfering IP and setting promisc mode -->
+      <para os="rhel;fedora;centos">Do this by first editing the <filename>/etc/sysconfig/network-scripts/ifcfg-EXTERNAL_INTERFACE</filename> file:</para>
+      <programlisting language="ini" os="rhel;fedora;centos">
+        DEVICE_INFO_HERE
+        ONBOOT=yes
+        BOOTPROTO=none
+        PROMISC=yes
+      </programlisting>
+      <para os="rhel;fedora;centos">Then, edit the <filename>/etc/sysconfig/network-scripts/ifcfg-br-ex</filename> file:</para>
+      <programlisting language="ini" os="rhel;fedora;centos">
+        DEVICE=br-ex
+        TYPE=Bridge
+        ONBOOT=no
+        BOOTPROTO=none
+        IPADDR=EXTERNAL_INTERFACE_IP
+        NETMASK=EXTERNAL_INTERFACE_NETMASK
+        GATEWAY=EXTERNAL_INTERFACE_GATEWAY
+      </programlisting>
+      <!-- TODO(sross): support other distros -->
 
       <para>Finally, we can now configure the settings for the particular plugins.  First, there are some general <acronym>OVS</acronym> configuration options to set, no matter whether you use VLANs or GRE tunneling.  We need to tell L3 agent and DHCP agent we are using <acronym>OVS</acronym> by editing <filename>/etc/neutron/l3_agent.ini</filename> and <filename>/etc/neutron/dhcp_agent</filename> (respectively):</para>
       <programlisting language="ini">
