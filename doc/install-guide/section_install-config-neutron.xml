@@ -122,7 +122,7 @@
       </programlisting>
       <!-- TODO(sross): support other distros -->
 
-      <para>Finally, we can now configure the settings for the particular plugins.  First, there are some general <acronym>OVS</acronym> configuration options to set, no matter whether you use VLANs or GRE tunneling.  We need to tell L3 agent and DHCP agent we are using <acronym>OVS</acronym> by editing <filename>/etc/neutron/l3_agent.ini</filename> and <filename>/etc/neutron/dhcp_agent</filename> (respectively):</para>
+      <para>Finally, we can now configure the settings for the particular plugins.  First, there are some general <acronym>OVS</acronym> configuration options to set, no matter whether you use VLANs or GRE tunneling.  We need to tell L3 agent and DHCP agent we are using <acronym>OVS</acronym> by editing <filename>/etc/neutron/l3_agent.ini</filename> and <filename>/etc/neutron/dhcp_agent.ini</filename> (respectively):</para>
       <programlisting language="ini">
         interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver
       </programlisting>
@@ -182,7 +182,6 @@
 
       <section xml:id="install-neutron.install-plugin.ovs.vlan">
         <title>Configuring the Neutron <acronym>OVS</acronym> plugin for VLANs</title>
-        <!-- NOTE(sross): this is a WIP, and has yet to be tested.  Additionally, a plugin install guide specific to compute nodes will have to be written -->
         <para>First, we must tell <acronym>OVS</acronym> that we want to use VLANS by editing <filename>/etc/neutron/plugins/openvswitch/ovs_neutron_plugin</filename>:</para>
         <programlisting language="ini">
           [ovs]
@@ -203,6 +202,11 @@
         <para>Next, we must tell the L3 and DHCP agents that we want to use namespaces, by editing <filename>/etc/neutron/l3_agent.ini</filename> and <filename>/etc/neutron/dhcp_agent.ini</filename>, respectively:</para>
         <programlisting language="ini">
           use_namespaces = True
+        </programlisting>
+
+        <para os="rhel;cento">Additionally, if you a using certain kernels with partial support for namespaces, you need to enable veth support, by editing the above files again:</para>
+        <programlisting language="ini" os="rhel;centos">
+          ovs_use_veth = True
         </programlisting>
 
         <para>Now, return to the <acronym>OVS</acronym> general instruction</para>
@@ -397,6 +401,10 @@
 
           <para><replaceable>SEG_ID</replaceable> should be <literal>2</literal> for the external network, and just any unique number inside the tunnel range specified before for any other network</para>
 
+          <note>
+            <para>These options are not needed beyond the first network, as Neutron will automatically increment the segementation id and copy the network type option for any additional networks.</para>
+          </note>
+
           <para>After you have finshed creating all the networks, we need to specify which some more details for the L3 agent.  We need to tell it what the external network's ID is, as well as the ID of the router associated with this machine (because we are not using namespaces, there can be only one router per machine).  To do this, edit <filename>/etc/neutron/l3_agent.ini</filename>:</para>
           <programlisting language="ini">
             gateway_external_network_id = EXT_NET_ID
@@ -411,7 +419,20 @@
         <section xml:id="install-neutron.configure-networks.plugin-specific.ovs.vlan">
           <title>VLAN network options</title>
           <para>TODO</para>
-          <!-- TODO(sross): fill this in -->
+          <para>When creating networks, you should use the options</para>
+          <screen><userinput> --provider:network_type vlan --provider:physical_network physnet1 --provider:segmentation_id SEG_ID</userinput></screen>
+
+          <para><replaceable>SEG_ID</replaceable> should be <literal>2</literal> for the external network, and just any unique number inside the vlan range specified before for any other network.</para>
+
+          <note>
+            <para>These options are not needed beyond the first network, as Neutron will automatically increment the segementation id and copy the network type and physical network options for any additional networks.</para>
+          </note>
+
+          <warning>
+            <para>Some NICs have linux drivers that do not handle VLANs properly.  See the <literal>ovs-vlan-bug-workaround</literal> and <literal>ovs-vlan-test</literal> man pages for more information.  Additionally, you may try turning off <literal>rx-vlan-offload</literal> and <literal>tx-vlan-offload</literal> using <literal>ethtool</literal> on the <replaceable>DATA_INTERFACE</replaceable>.</para>
+
+            <para>If you are running OpenStack inside a virtualized environment (for testing purposes), switching to the <literal>virtio</literal> NIC type (or a similar technology if you are not using KVM/QEMU) may solve the issue.</para> 
+          </warning>
         </section>
       </section>
     </section>
