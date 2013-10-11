@@ -20,7 +20,9 @@
 
   <para>Additionally, IP addresses on an external networks can be allocated to ports on the internal network.  Whenever something is connected to a subnet, that connection is called a port.  External network IP addresses can be associated with ports to VMs.  This way, entities on the outside network can access VMs.</para>
 
-  <para>Each of the plugins that Neutron uses has its own concepts as well.  While not vital to operating Neutron, these concepts can be useful to help with setting up Neutron.</para>
+  <para>Neutron also supports "security groups".  Security groups allow administrators to define firewall rules in groups.  Then, a given VM can have one or more security groups to which it belongs, and Neutron will apply those rules to block or unblock ports, port ranges, or traffic types for that VM</para>.
+
+  <para>Each of the plugins that Neutron uses has its own concepts as well.  While not vital to operating Neutron, these concepts can be useful to help with setting up Neutron.  All Neutron installations use a core plugin, as well as a security group plugin (or just the No-Op security group plugin).  Additionally, Firewall-as-a-service (FWaaS) and Load-balancing-as-a-service (LBaaS) plugins are available.</para>
 
   <section xml:id="concepts-neutron.openvswitch">
     <title>Open vSwitch Concepts</title>
@@ -38,5 +40,8 @@
     <para>Generic Routing Encapsulation, or GRE for short, is the technology used in many VPNs.  In essence, it works by wrapping IP packets and entirely new packets with different routing information.  When the new packet reaches its destination, it is unwrapped, and the underlying packet is routed.  To use GRE with Open vSwitch, Neutron creates GRE Tunnels.  This tunnels are ports on a bridge, and allow bridges on different systems to act as though they were in fact one bridge, allowing the compute node and network node to act as one for the purposes of routing.</para>
 
     <para>Virtual LANs, or VLANs for short, on the other hand, use a special modification to the ethernet header.  They add a 4-byte VLAN tag that ranges between 1 and 4094 (the 0 tag is special, and the 4095 tag, made of all ones, is equivalent to an untagged packet).  Special NICs, switches, and routers know how to interpret the VLAN tags, as does Open vSwitch.  Packets tagged for one VLAN will only be shared with other devices configured to be on that VLAN, despite the fact that all of the devices are on the same physical network.</para>
+
+    <para>The most common security group driver used with Open vSwitch is the Hybrid IPTables/Open vSwtich plugin.  It uses a combination for IPTables and OpenFlow rules.   IPTables is a tool used for creating firewalls and setting up NATs on Linux.  It uses a complex rule system and "chains" of rules to allow for the complex rules required by Neutron's security groups.</para> 
   </section>
+
 </section>
